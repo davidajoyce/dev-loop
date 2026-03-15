@@ -53,8 +53,8 @@ STOP_FILE="/tmp/orchestrate-stop"
 ITERATION=0
 START_TIME=$(date +%s)
 
-# Clean up any stale stop signal
-rm -f "$STOP_FILE"
+# Clean up any stale signals from previous sessions
+rm -f "$STOP_FILE" "$STEER_FILE"
 
 # Trap Ctrl+C for graceful shutdown — writes progress before exiting
 graceful_shutdown() {
@@ -78,6 +78,7 @@ SHUTDOWN
   echo "║  Resume: ./orchestrate.sh $PRD_FILE"
   echo "╚══════════════════════════════════════════════════════════╝"
 
+  rm -f "$STOP_FILE" "$STEER_FILE"
   osascript -e 'display notification "Orchestrate loop stopped gracefully" with title "Orchestrate"' 2>/dev/null || true
   exit 0
 }
@@ -329,6 +330,7 @@ $PROMPT"
     fi
 
     # macOS notification
+    rm -f "$STOP_FILE" "$STEER_FILE"
     osascript -e 'display notification "Orchestrate loop halted after '"$ITERATION"' iterations" with title "Orchestrate"' 2>/dev/null || true
 
     exit 0
@@ -371,4 +373,5 @@ echo "║  Total time: $(( ($(date +%s) - START_TIME) / 60 )) minutes"
 echo "║  Log: $SESSION_LOG"
 echo "╚══════════════════════════════════════════════════════════╝"
 
+rm -f "$STOP_FILE" "$STEER_FILE"
 osascript -e 'display notification "Orchestrate loop finished after '"$MAX_ITERATIONS"' iterations" with title "Orchestrate"' 2>/dev/null || true
