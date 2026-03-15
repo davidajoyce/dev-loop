@@ -10,10 +10,6 @@ Test and debug your web app in a real browser using [agent-browser](https://gith
 
 **To use this skill:** Copy it into your project at `.claude/skills/browser-debug/SKILL.md` and customize the interaction maps below for your product.
 
-## IMPORTANT: Use agent-browser, NOT Playwright MCP
-
-**Always use `agent-browser` CLI commands via Bash.** Do NOT use Playwright MCP tools (`mcp__playwright__*`) even if they are available in your environment. agent-browser is a Rust-native CLI that uses 82% fewer tokens per interaction than Playwright MCP, keeping your context window lean. All commands below use `npx agent-browser` — follow them exactly.
-
 ## Setup
 
 ```bash
