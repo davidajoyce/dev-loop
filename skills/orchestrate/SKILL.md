@@ -266,26 +266,13 @@ Run the actual commands/flows. Return a 1,000-2,000 token summary with:
 ```
 Agent (description: "Browser verification for [task]")
 
-Prompt: "You are a browser verification agent. Use the agent-browser CLI to verify UI changes.
-
-IMPORTANT: Use `npx agent-browser` CLI commands via Bash for ALL browser interactions.
-Do NOT use Playwright MCP tools (mcp__playwright__*) or ToolSearch for browser tools.
-agent-browser is already installed — just call it directly.
+Prompt: "You are a browser verification agent. Use the /browser-debug skill to verify UI changes.
+Read .claude/skills/browser-debug/SKILL.md for the pre-mapped page selectors, flows, and commands.
 
 TASK: [task description]
 EXPECTED: [what the user should see]
 
-Read .claude/skills/browser-debug/SKILL.md for pre-mapped page selectors and flows.
-Commands to use:
-- npx agent-browser --session myapp open http://localhost:3000/[page]
-- npx agent-browser --session myapp wait --load networkidle
-- npx agent-browser --session myapp snapshot -i
-- npx agent-browser --session myapp screenshot ./test-results/[name].png
-- npx agent-browser --session myapp errors
-- npx agent-browser --session myapp close
-
 Verify elements exist, interactions work, and no JS console errors.
-
 Return pass/fail with evidence: snapshot output, screenshot paths, any errors found.
 Summary in 1,000-2,000 tokens max."
 ```
