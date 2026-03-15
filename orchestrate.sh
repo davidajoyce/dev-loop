@@ -149,18 +149,15 @@ if $MONITOR_MODE; then
     # Mouse drag copies to clipboard too
     tmux bind-key -T copy-mode-vi MouseDragEnd1Pane send-keys -X copy-pipe-and-cancel "pbcopy 2>/dev/null || xclip -selection clipboard 2>/dev/null" 2>/dev/null || true
 
-    # ─── Layout: 4 panes ─────────────────────────────────────────────────
+    # ─── Layout: 3 panes ─────────────────────────────────────────────────
     #
     #  ┌─────────────────────┬────────────────────────┐
-    #  │                     │  TASKS (PRD)           │
-    #  │  MAIN LOOP          │  Shows current PRD     │
-    #  │  (orchestrate.sh)   │  with task checkboxes  │
-    #  │                     ├────────────────────────┤
     #  │                     │  STATE + PROGRESS      │
-    #  │                     │  Verdict, last progress│
-    #  ├─────────────────────┼────────────────────────┤
-    #  │  ACTIVITY STREAM    │  STEER (interactive)   │
-    #  │  Tool calls + text  │  Type to redirect next │
+    #  │  MAIN LOOP          │  Verdict, tasks file,  │
+    #  │  (orchestrate.sh)   │  recent progress       │
+    #  │                     ├────────────────────────┤
+    #  │                     │  ACTIVITY STREAM       │
+    #  │                     │  Tool calls + text     │
     #  └─────────────────────┴────────────────────────┘
 
     # Main pane (0): run the loop
@@ -170,33 +167,30 @@ if $MONITOR_MODE; then
     [[ -n "$GOAL" ]] && ARGS="$ARGS --goal='$GOAL'"
     tmux send-keys -t orchestrate:0.0 "cd $(pwd) && ./orchestrate.sh $ARGS" Enter
 
-    # Pane 1 (top-right): Tasks/PRD — refreshes every 5s
-    tmux split-window -h -t orchestrate:0.0 -p 45
-    tmux send-keys -t orchestrate:0.1 "cd $(pwd) && while true; do clear; echo '━━━ TASKS (PRD) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'; echo ''; if [ -f '$PRD_FILE' ]; then cat '$PRD_FILE'; else echo 'No PRD file yet — waiting for Phase 0...'; fi; echo ''; echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'; echo 'File: $PRD_FILE'; echo 'Edit this file to add/change tasks between iterations.'; sleep 5; done" Enter
+    # Pane 1 (top-right): State + progress + tasks file hint
+    tmux split-window -h -t orchestrate:0.0
+    tmux send-keys -t orchestrate:0.1 "cd $(pwd) && while true; do echo ''; echo \"━━━ \$(date '+%H:%M:%S') ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"; echo '=== VERDICT ==='; cat orchestrate/state.md 2>/dev/null || echo 'No state yet'; echo ''; echo '=== TASKS ==='; echo 'File: $PRD_FILE (edit between iterations to add/change tasks)'; if [ -f '$PRD_FILE' ]; then grep -E '^\#\#\#|^\- \[' '$PRD_FILE' 2>/dev/null || echo 'No tasks yet'; else echo 'No PRD file yet — waiting for Phase 0...'; fi; echo ''; echo '=== RECENT PROGRESS ==='; tail -20 progress.md 2>/dev/null || echo 'No progress yet'; sleep 5; done" Enter
 
-    # Pane 2 (bottom-right split from pane 1): State + Progress
-    tmux split-window -v -t orchestrate:0.1 -p 50
-    tmux send-keys -t orchestrate:0.2 "cd $(pwd) && while true; do clear; echo '━━━ STATE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'; cat orchestrate/state.md 2>/dev/null || echo 'No state yet'; echo ''; echo '━━━ RECENT PROGRESS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'; tail -20 progress.md 2>/dev/null || echo 'No progress yet'; sleep 5; done" Enter
-
-    # Pane 3 (bottom-left split from pane 0): Activity stream + steer instructions
-    tmux split-window -v -t orchestrate:0.0 -p 30
-    tmux send-keys -t orchestrate:0.3 "cd $(pwd) && echo '━━━ ACTIVITY STREAM ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'; echo ''; echo 'Steer the next iteration:'; echo '  echo \"your message\" > /tmp/orchestrate-steer'; echo ''; echo 'Stop after current iteration:'; echo '  touch /tmp/orchestrate-stop'; echo ''; echo 'Copy text: mouse-drag to select, text auto-copies to clipboard'; echo '           Or: Ctrl+b [  then arrow keys to navigate, Space to'; echo '           start selection, Enter or y to copy, q to exit'; echo ''; echo 'Waiting for activity...'; echo ''; tail -f $SHARED_LOG | jq -rj '
-      select(.type == \"assistant\") | .message.content[]? |
+    # Pane 2 (bottom-right): Activity stream
+    tmux split-window -v -t orchestrate:0.1
+    tmux send-keys -t orchestrate:0.2 "cd $(pwd) && echo 'Waiting for log data...'; tail -f $SHARED_LOG | jq -r '
+      (select(.type == \"assistant\") | .message.content[]? |
         if .type == \"tool_use\" then
-          if .name == \"Read\" then \"📖 Read: \" + (.input.file_path // \"?\" | split(\"/\") | last) + \"\n\"
-          elif .name == \"Write\" then \"✏️  Write: \" + (.input.file_path // \"?\" | split(\"/\") | last) + \"\n\"
-          elif .name == \"Edit\" then \"🔧 Edit: \" + (.input.file_path // \"?\" | split(\"/\") | last) + \"\n\"
-          elif .name == \"Bash\" then \"💻 Bash: \" + (.input.command // \"?\" | .[0:80]) + \"\n\"
-          elif .name == \"Grep\" then \"🔍 Grep: \" + (.input.pattern // \"?\") + \" in \" + (.input.path // \".\" | split(\"/\") | last) + \"\n\"
-          elif .name == \"Glob\" then \"📁 Glob: \" + (.input.pattern // \"?\") + \"\n\"
-          elif .name == \"Agent\" then \"🤖 Agent: \" + (.input.description // \"?\") + \"\n\"
-          elif .name == \"Skill\" then \"⚡ Skill: \" + (.input.skill // \"?\") + \"\n\"
-          else \"🔧 \" + .name + \"\n\"
+          if .name == \"Read\" then \"📖 Read: \" + (.input.file_path // \"?\" | split(\"/\") | last)
+          elif .name == \"Write\" then \"✏️  Write: \" + (.input.file_path // \"?\" | split(\"/\") | last)
+          elif .name == \"Edit\" then \"🔧 Edit: \" + (.input.file_path // \"?\" | split(\"/\") | last)
+          elif .name == \"Bash\" then \"💻 Bash: \" + (.input.command // \"?\" | .[0:80])
+          elif .name == \"Grep\" then \"🔍 Grep: \" + (.input.pattern // \"?\") + \" in \" + (.input.path // \".\" | split(\"/\") | last)
+          elif .name == \"Glob\" then \"📁 Glob: \" + (.input.pattern // \"?\")
+          elif .name == \"Agent\" then \"🤖 Agent: \" + (.input.description // \"?\")
+          elif .name == \"Skill\" then \"⚡ Skill: \" + (.input.skill // \"?\")
+          else \"🔧 \" + .name
           end
         elif .type == \"text\" and (.text | length) > 0 then
-          \"💬 \" + (.text | .[0:120] | gsub(\"\\n\"; \" \")) + \"\n\"
+          \"💬 \" + (.text | .[0:120] | gsub(\"\\n\"; \" \"))
         else empty
         end
+      )
     ' 2>/dev/null" Enter
 
     # Focus main pane
