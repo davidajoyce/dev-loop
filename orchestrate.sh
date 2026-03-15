@@ -4,9 +4,9 @@
 #
 # Usage:
 #   ./orchestrate.sh                    # Run with default prd.md
-#   ./orchestrate.sh test-prd.md        # Run with a specific PRD file
+#   ./orchestrate.sh my-prd.md          # Run with a specific PRD file
 #   ./orchestrate.sh --monitor          # Run with tmux monitoring panes
-#   ./orchestrate.sh test-prd.md --monitor  # Both
+#   ./orchestrate.sh my-prd.md --monitor  # Both
 #   ./orchestrate.sh --goal="add Stripe checkout to conversion flow"  # Goal-driven mode
 #
 
@@ -18,7 +18,7 @@ MONITOR_MODE=false
 MAX_ITERATIONS=50
 COOLDOWN_SECONDS=5
 LOG_DIR="/tmp/orchestrate-logs"
-STATE_FILE="thoughts/orchestrate-state.md"
+STATE_FILE="orchestrate/state.md"
 STEER_FILE="/tmp/orchestrate-steer"
 MODEL="claude-opus-4-6"
 GOAL=""
@@ -42,11 +42,11 @@ fi
 if [ -n "$GOAL" ]; then
   # Generate a safe filename from the goal
   GOAL_SLUG=$(echo "$GOAL" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | head -c 50)
-  PRD_FILE="prd-${GOAL_SLUG}.json"
+  PRD_FILE="prd-${GOAL_SLUG}.md"
 fi
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
-mkdir -p "$LOG_DIR" thoughts
+mkdir -p "$LOG_DIR" orchestrate
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 SESSION_LOG="$LOG_DIR/session-$TIMESTAMP.jsonl"
 STOP_FILE="/tmp/orchestrate-stop"
@@ -60,13 +60,13 @@ rm -f "$STOP_FILE"
 graceful_shutdown() {
   echo ""
   echo "  ⚠  Graceful shutdown requested..."
-  echo "  Writing shutdown state to thoughts/orchestrate-state.md..."
+  echo "  Writing shutdown state to orchestrate/state.md..."
 
-  cat > thoughts/orchestrate-state.md << SHUTDOWN
+  cat > orchestrate/state.md << SHUTDOWN
 VERDICT: HALT
 CYCLE: $ITERATION
 REASON: Graceful shutdown requested by user (Ctrl+C or stop signal).
-TASK: $(grep -m1 '### Task' "$PRD_FILE" | head -1 || echo "unknown")
+TASK: $(grep -m1 '### ' "$PRD_FILE" | head -1 || echo "unknown")
 NOTE: Loop was interrupted. Progress up to this point has been committed. Resume with ./orchestrate.sh $PRD_FILE
 SHUTDOWN
 
@@ -74,7 +74,7 @@ SHUTDOWN
   echo "╔══════════════════════════════════════════════════════════╗"
   echo "║  GRACEFULLY STOPPED                                     ║"
   echo "║  Iterations completed: $ITERATION"
-  echo "║  State saved to: thoughts/orchestrate-state.md"
+  echo "║  State saved to: orchestrate/state.md"
   echo "║  Resume: ./orchestrate.sh $PRD_FILE"
   echo "╚══════════════════════════════════════════════════════════╝"
 
@@ -137,7 +137,7 @@ if $MONITOR_MODE; then
 
     # Right pane: loop that shows state + progress (works without 'watch' too)
     tmux split-window -h -t orchestrate:0.0
-    tmux send-keys -t orchestrate:0.1 "cd $(pwd) && while true; do echo ''; echo \"━━━ \$(date '+%H:%M:%S') ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"; echo '=== VERDICT ==='; cat thoughts/orchestrate-state.md 2>/dev/null || echo 'No state yet'; echo ''; echo '=== RECENT PROGRESS ==='; tail -30 progress.md 2>/dev/null || echo 'No progress yet'; sleep 5; done" Enter
+    tmux send-keys -t orchestrate:0.1 "cd $(pwd) && while true; do echo ''; echo \"━━━ \$(date '+%H:%M:%S') ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"; echo '=== VERDICT ==='; cat orchestrate/state.md 2>/dev/null || echo 'No state yet'; echo ''; echo '=== RECENT PROGRESS ==='; tail -30 progress.md 2>/dev/null || echo 'No progress yet'; sleep 5; done" Enter
 
     # Bottom-right pane: detailed activity stream — shows tool calls WITH arguments
     tmux split-window -v -t orchestrate:0.1
@@ -280,13 +280,13 @@ $PROMPT"
       fi
 
       # Move orchestrate state and plan
-      if [ -f "thoughts/orchestrate-state.md" ]; then
-        mv "thoughts/orchestrate-state.md" "$ARCHIVE_DIR/orchestrate-state-${ARCHIVE_TS}.md"
-        echo "     ✓ thoughts/orchestrate-state.md"
+      if [ -f "orchestrate/state.md" ]; then
+        mv "orchestrate/state.md" "$ARCHIVE_DIR/orchestrate-state-${ARCHIVE_TS}.md"
+        echo "     ✓ orchestrate/state.md"
       fi
-      if [ -f "thoughts/orchestrate-plan.md" ]; then
-        mv "thoughts/orchestrate-plan.md" "$ARCHIVE_DIR/orchestrate-plan-${ARCHIVE_TS}.md"
-        echo "     ✓ thoughts/orchestrate-plan.md"
+      if [ -f "orchestrate/plan.md" ]; then
+        mv "orchestrate/plan.md" "$ARCHIVE_DIR/orchestrate-plan-${ARCHIVE_TS}.md"
+        echo "     ✓ orchestrate/plan.md"
       fi
 
       echo "  📦 Archive complete. Next run with same goal will start fresh."

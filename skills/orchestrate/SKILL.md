@@ -16,10 +16,10 @@ You are the orchestrator for this project. Each invocation is ONE full cycle of 
 You are a manager, not an engineer. You read state files. You dispatch agents. You judge results.
 
 **Files you ARE allowed to read directly:**
-- `prd.md` / PRD JSON files (task list)
+- `prd.md` (task list)
 - `progress.md` (session log)
-- `thoughts/orchestrate-state.md` (previous verdict)
-- `thoughts/orchestrate-plan.md` (previous plan)
+- `orchestrate/state.md` (previous verdict)
+- `orchestrate/plan.md` (previous plan)
 - `git log` output (recent commits)
 - `git diff` output (compact diffs in JUDGE phase only)
 
@@ -85,40 +85,45 @@ Return a structured summary in 1,000-2,000 tokens with:
    - Right-sized: too big = context overflow; too small = unnecessary iteration overhead
    - **Delegatable**: each task should be describable as a self-contained worker assignment
    - **E2E verifiable**: acceptance criteria should prefer end-to-end verification over unit checks
-   - **Browser-verified when UI-facing**: any task that changes frontend behavior, layout, or user flows should include a browser-debug verification step (e.g. `npx agent-browser --session wcai open http://localhost:3000/chat && npx agent-browser --session wcai snapshot -i`). See the `/browser-debug` skill for pre-mapped selectors and flows.
+   - **Browser-verified when UI-facing**: any task that changes frontend behavior, layout, or user flows should include a browser-debug verification step. See the `/browser-debug` skill for pre-mapped selectors and flows.
 
-4. **Write the PRD file** (JSON format) to the path specified in the prompt:
+4. **Write the PRD file** (markdown format) to the path specified in the prompt:
 
-```json
-{
-  "goal": "The original goal string",
-  "created": "YYYY-MM-DD HH:MM",
-  "guidelines": {
-    "commit_strategy": "Commit early and often. Each meaningful unit of work gets its own atomic commit.",
-    "parallelism": "Use subagents to parallelize independent subtasks within a task.",
-    "delegation": "The orchestrator plans and judges — workers execute. Only the orchestrator reads/writes PRD, state, and progress files."
-  },
-  "tasks": [
-    {
-      "id": 1,
-      "name": "Short task name",
-      "description": "What needs to be done, specifically",
-      "status": "todo",
-      "acceptance_criteria": [
-        "E2E: [end-to-end verification — what a user or test would observe]",
-        "Functional: [specific behavior that can be verified]",
-        "Regression: [existing tests still pass]",
-        "Browser: [if UI-facing — use /browser-debug skill to verify visually]"
-      ],
-      "depends_on": [],
-      "files_likely_involved": ["src/lib/example.ts"]
-    }
-  ]
-}
+```markdown
+# Goal: [The original goal string]
+
+Created: YYYY-MM-DD HH:MM
+
+## Guidelines
+- Commit early and often. Each meaningful unit of work gets its own atomic commit.
+- Use subagents to parallelize independent subtasks within a task.
+- The orchestrator plans and judges — workers execute.
+
+## Tasks
+
+### 1. [Short task name]
+[What needs to be done, specifically]
+
+**Likely files:** `src/lib/example.ts`, `src/app/page.tsx`
+
+- [ ] E2E: [end-to-end verification — what a user or test would observe]
+- [ ] Functional: [specific behavior that can be verified]
+- [ ] Regression: existing tests still pass
+- [ ] Browser: [if UI-facing — use /browser-debug skill to verify visually]
+
+### 2. [Next task name]
+[Description]
+
+Depends on: Task 1
+
+**Likely files:** `src/lib/other.ts`
+
+- [ ] [acceptance criterion]
+- [ ] [acceptance criterion]
 ```
 
 5. **Commit the PRD** with message: `plan: decompose goal into N tasks — [goal summary]`
-6. **Write initial state** to `thoughts/orchestrate-state.md`:
+6. **Write initial state** to `orchestrate/state.md`:
 ```
 VERDICT: CONTINUE
 CYCLE: 0
@@ -136,13 +141,11 @@ NEXT: Task 1 — [first task name]
 **Read ONLY these state files** (no source code, no exploration):
 
 1. `progress.md` — What was already done, tried, and learned
-2. **PRD file** — If $ARGUMENTS specifies a PRD file, use that instead of the default `prd.md`.
-   - If the file ends in `.json`, parse it as JSON. Find the first task with `"status": "todo"`.
-   - If the file ends in `.md`, find the first unchecked `[ ]` item (legacy mode).
-3. `thoughts/orchestrate-state.md` — If it exists, read the previous cycle's judgment and any retry notes
+2. **PRD file** — If $ARGUMENTS specifies a PRD file, use that instead of the default `prd.md`. Find the first task with unchecked `[ ]` items.
+3. `orchestrate/state.md` — If it exists, read the previous cycle's judgment and any retry notes
 4. Check `git log --oneline -5` for recent commits
 
-If ALL tasks are complete (all `"status": "done"` in JSON, or all `[x]` in markdown), write to `thoughts/orchestrate-state.md`:
+If ALL tasks are complete (all checkboxes are `[x]`), write to `orchestrate/state.md`:
 ```
 VERDICT: HALT
 TIMESTAMP: [YYYY-MM-DD HH:MM — use the current date/time from the prompt]
@@ -160,7 +163,7 @@ You are now the **Planner**. You have the task description from Phase 1. Now pla
 Agent (subagent_type: "Explore", description: "Research for task planning")
 
 Prompt: "I'm planning work on this task: [task name and description].
-The likely files involved are: [files_likely_involved from PRD].
+The likely files involved are: [likely files from PRD].
 I need to understand:
 - What these files currently do and their interfaces
 - Related files that might also need changes
@@ -181,7 +184,7 @@ From the research summary (or directly from the PRD if the task is straightforwa
 
 Workers are engineers, not typists. Give them goals and let them figure out the implementation. Point them at the right area of the codebase, but don't dictate which files to edit or what functions to write.
 
-Write your plan to `thoughts/orchestrate-plan.md`:
+Write your plan to `orchestrate/plan.md`:
 ```markdown
 # Current Task: [Task name from prd.md]
 
@@ -269,14 +272,8 @@ from this task look correct and function properly.
 TASK: [task description]
 EXPECTED: [what the user should see]
 
-Use the /browser-debug skill's pre-mapped selectors and flows. Steps:
-1. npx agent-browser --session wcai open http://localhost:3000/[relevant-page]
-2. npx agent-browser --session wcai wait --load networkidle
-3. npx agent-browser --session wcai snapshot -i (verify elements exist and have correct state)
-4. npx agent-browser --session wcai screenshot ./test-results/[task]-verify.png
-5. Test the interaction flow (click buttons, fill forms, check transitions)
-6. npx agent-browser --session wcai errors (check for JS console errors)
-7. npx agent-browser --session wcai close
+Use the /browser-debug skill's pre-mapped selectors and flows.
+Verify elements exist, interactions work, and no JS console errors.
 
 Return pass/fail with evidence: snapshot output, screenshot paths, any errors found.
 Summary in 1,000-2,000 tokens max."
@@ -309,7 +306,7 @@ Prompt: "Run the project's test suite and build. Report pass/fail with any failu
 
 ## Phase 5: DECIDE
 
-Based on your judgment, write your verdict to `thoughts/orchestrate-state.md`:
+Based on your judgment, write your verdict to `orchestrate/state.md`:
 
 ### If the task PASSED verification:
 
@@ -323,9 +320,7 @@ NEXT: [next task from PRD, or HALT if none remain]
 ```
 
 Then:
-1. **Update the PRD file**:
-   - JSON format: set the completed task's `"status"` to `"done"`. Do NOT add or remove tasks.
-   - Markdown format: flip completed sub-tasks from `[ ]` to `[x]`
+1. **Update the PRD file**: flip completed checkboxes from `[ ]` to `[x]`
 2. Append a session log entry to `progress.md` (use the current date/time from the prompt):
    ```
    ### [YYYY-MM-DD HH:MM] — [Task Name] (Orchestrated)
@@ -402,10 +397,10 @@ The bash loop will delete the PRD file and re-run Phase 0 on the next iteration.
 
 | File | Purpose | Lifecycle |
 |---|---|---|
-| `prd.md` | Task list with completion status | Updated each cycle |
+| `prd.md` | Task list with completion checkboxes | Updated each cycle |
 | `progress.md` | Append-only session log | Appended each cycle |
-| `thoughts/orchestrate-state.md` | Last cycle's verdict + context for next cycle | Overwritten each cycle |
-| `thoughts/orchestrate-plan.md` | Current cycle's decomposition plan | Overwritten each cycle |
+| `orchestrate/state.md` | Last cycle's verdict + context for next cycle | Overwritten each cycle |
+| `orchestrate/plan.md` | Current cycle's decomposition plan | Overwritten each cycle |
 
 ## Rules
 
@@ -426,7 +421,7 @@ The bash loop will delete the PRD file and re-run Phase 0 on the next iteration.
 ## Self-Check: Am I About to Break the Rules?
 
 Before using Read, Grep, or Glob, ask yourself:
-- "Is this a state file (prd, progress, orchestrate-state, orchestrate-plan)?" → OK
+- "Is this a state file (prd, progress, orchestrate/state, orchestrate/plan)?" → OK
 - "Is this source code, a config file, a script, or a test?" → **STOP. Dispatch an agent.**
 - "Is this a git diff in the JUDGE phase?" → OK (use Bash for `git diff`)
 - "Am I curious about the codebase?" → **STOP. Dispatch a research agent.**

@@ -109,30 +109,34 @@ Workers are autonomous. They get a goal, a starting point in the codebase, and a
 
 ### PRD Format
 
-Tasks are defined in JSON:
+Tasks are defined in markdown — human-readable, easy to scan, clean diffs:
 
-```json
-{
-  "goal": "add dark mode support",
-  "tasks": [
-    {
-      "id": 1,
-      "name": "Add theme toggle component",
-      "description": "Create a toggle that switches between light and dark mode",
-      "status": "todo",
-      "acceptance_criteria": [
-        "E2E: clicking toggle switches the theme visually",
-        "Functional: preference persists across page reloads",
-        "Browser: use /browser-debug to verify the toggle works"
-      ],
-      "depends_on": [],
-      "files_likely_involved": ["src/components/ThemeToggle.tsx"]
-    }
-  ]
-}
+```markdown
+# Goal: add dark mode support
+
+Created: 2026-03-16 10:00
+
+## Tasks
+
+### 1. Add theme toggle component
+Create a toggle that switches between light and dark mode.
+
+**Likely files:** `src/components/ThemeToggle.tsx`
+
+- [ ] E2E: clicking toggle switches the theme visually
+- [ ] Functional: preference persists across page reloads
+- [ ] Browser: use /browser-debug to verify the toggle works
+
+### 2. Update Tailwind config for dark variants
+Add dark mode class support to all existing components.
+
+**Likely files:** `tailwind.config.ts`, `src/app/globals.css`
+
+- [ ] All components render correctly in dark mode
+- [ ] Existing light mode styles unaffected
 ```
 
-No `verification_commands` — acceptance criteria is the contract. Workers and judges figure out how to verify.
+Acceptance criteria is the contract. Workers and judges figure out how to verify.
 
 ### Key Rules
 
