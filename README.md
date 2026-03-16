@@ -189,9 +189,24 @@ echo "skip tests, focus on the API" > /tmp/orchestrate-steer
 ## Requirements
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
-- [agent-browser](https://github.com/vercel-labs/agent-browser) (optional, for browser-debug skill)
-- `jq` (for hooks and monitoring)
-- `tmux` (optional, for `--monitor` mode)
+
+### System dependencies
+
+Install these before running:
+
+```bash
+# macOS
+brew install jq tmux
+
+# Linux (Debian/Ubuntu)
+sudo apt-get install jq tmux
+```
+
+| Dependency | Required | Purpose |
+|-----------|----------|---------|
+| `jq` | Yes | Hooks, tmux activity stream, log parsing |
+| `tmux` | For `--monitor` mode | Split-pane monitoring dashboard |
+| [agent-browser](https://github.com/vercel-labs/agent-browser) | For browser-debug skill | Browser-based UI testing |
 
 ## License
 
