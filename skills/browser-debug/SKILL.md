@@ -13,15 +13,17 @@ Test and debug your web app in a real browser using [agent-browser](https://gith
 ## Setup
 
 ```bash
-npm install agent-browser
-npx agent-browser install  # Downloads Chrome for Testing
+# Install via npm, brew, or cargo — pick one:
+npm install agent-browser        # or: brew install agent-browser
+npx agent-browser install        # Downloads Chrome for Testing (first time only)
 ```
 
 ## Quick Start
 
 ```bash
 # Start a named session (reusable across commands)
-npx agent-browser --session myapp open http://localhost:3000
+# Replace PORT with your dev server port (e.g. 3000, 5173, 8080)
+npx agent-browser --session myapp open http://localhost:PORT
 npx agent-browser --session myapp wait --load networkidle
 npx agent-browser --session myapp snapshot -i
 ```

@@ -85,7 +85,7 @@ Return a structured summary in 1,000-2,000 tokens with:
    - Right-sized: too big = context overflow; too small = unnecessary iteration overhead
    - **Delegatable**: each task should be describable as a self-contained worker assignment
    - **E2E verifiable**: acceptance criteria should prefer end-to-end verification over unit checks
-   - **Browser-verified when UI-facing**: any task that changes frontend behavior, layout, or user flows should include a browser-debug verification step. See the `/browser-debug` skill for pre-mapped selectors and flows.
+   - **Browser-verified when UI-facing**: if the `/browser-debug` skill is available, any task that changes frontend behavior, layout, or user flows should include a browser verification step.
 
 4. **Write the PRD file** (markdown format) to the path specified in the prompt:
 
@@ -104,19 +104,19 @@ Created: YYYY-MM-DD HH:MM
 ### 1. [Short task name]
 [What needs to be done, specifically]
 
-**Likely files:** `src/lib/example.ts`, `src/app/page.tsx`
+**Likely files:** `path/to/relevant/file`
 
 - [ ] E2E: [end-to-end verification — what a user or test would observe]
 - [ ] Functional: [specific behavior that can be verified]
 - [ ] Regression: existing tests still pass
-- [ ] Browser: [if UI-facing — use /browser-debug skill to verify visually]
+- [ ] Browser: [if UI-facing and /browser-debug skill is available — verify visually]
 
 ### 2. [Next task name]
 [Description]
 
 Depends on: Task 1
 
-**Likely files:** `src/lib/other.ts`
+**Likely files:** `path/to/other/file`
 
 - [ ] [acceptance criterion]
 - [ ] [acceptance criterion]
@@ -226,7 +226,7 @@ You are a worker agent. Your job is to achieve a goal, not follow a script.
 GOAL: [what to achieve — describe the outcome, not the steps]
 START HERE: [area of codebase to explore — a directory, a module, or a few likely files]
 DONE WHEN: [acceptance criteria — observable outcomes]
-VERIFY: [verification method appropriate for the task — could be commands, agent-browser (see /browser-debug skill), etc.]
+VERIFY: [verification method appropriate for the task — could be running tests, curl, agent-browser if /browser-debug skill is available, etc.]
 
 You decide how to implement this. Explore the codebase, understand the patterns,
 and make the changes you think are right. Commit when done.
@@ -262,7 +262,7 @@ Run the actual commands/flows. Return a 1,000-2,000 token summary with:
 - Any issues found"
 ```
 
-2. **Browser verification** (for UI-facing changes — dispatch a browser-debug agent):
+2. **Browser verification** (optional — if `/browser-debug` skill is installed):
 ```
 Agent (description: "Browser verification for [task]")
 
@@ -276,7 +276,6 @@ Verify elements exist, interactions work, and no JS console errors.
 Return pass/fail with evidence: snapshot output, screenshot paths, any errors found.
 Summary in 1,000-2,000 tokens max."
 ```
-**Use browser verification whenever the task touches pages, components, styles, or user-facing behavior.**
 
 3. **Regression tests** (dispatch a test agent):
 ```
