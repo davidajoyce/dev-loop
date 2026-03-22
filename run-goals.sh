@@ -6,7 +6,7 @@
 #   ./run-goals.sh                  # Run through goals in auto mode
 #   ./run-goals.sh my-goals.md      # Use a different goals file
 #   ./run-goals.sh --skip           # Skip current goal, mark done
-#   ./run-goals.sh --max-turns=50   # Limit turns per goal (prevents runaway sessions)
+#   ./run-goals.sh --timeout=900    # Timeout per goal in seconds (default: 900 = 15min)
 #
 # How it works:
 #   Claude runs autonomously on each goal (auto mode via -p).
@@ -23,14 +23,14 @@
 GOALS_FILE="${1:-goals.md}"
 SKIP_FLAG=false
 COOLDOWN=3
-MAX_TURNS=""
+GOAL_TIMEOUT=900
 LOG_DIR="/tmp/goal-runner"
 
 for arg in "$@"; do
   case $arg in
     --skip) SKIP_FLAG=true ;;
     --cooldown=*) COOLDOWN="${arg#*=}" ;;
-    --max-turns=*) MAX_TURNS="${arg#*=}" ;;
+    --timeout=*) GOAL_TIMEOUT="${arg#*=}" ;;
   esac
 done
 
@@ -214,11 +214,11 @@ If you cannot achieve this goal after reasonable effort:
 - Mark line $LINE_NUM in $GOALS_FILE as stashed: change '- [ ]' to '- [~]'
 - Do NOT commit — just stash and stop."
 
-  claude -p "$GOAL_PROMPT" \
+  timeout "$GOAL_TIMEOUT" claude -p "$GOAL_PROMPT" \
     --dangerously-skip-permissions \
     --verbose \
     --output-format stream-json \
-    ${MAX_TURNS:+--max-turns "$MAX_TURNS"} \
+    --append-system-prompt "CRITICAL: Never use run_in_background for Bash commands. Always run commands in the foreground. Background processes cause stale reminders that prevent clean session exit. Use timeouts for slow commands instead of backgrounding them." \
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
 
