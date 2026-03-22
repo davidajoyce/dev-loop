@@ -159,6 +159,74 @@ To set it up for your project:
 
 The orchestrate skill automatically dispatches browser verification agents for UI-facing tasks.
 
+## Goal Runner
+
+A simpler alternative to the full orchestrator — runs through a checklist of goals sequentially, one Claude session per goal.
+
+### Setup
+
+```bash
+cp run-goals.sh ./run-goals.sh
+cp goals.md ./goals.md
+chmod +x run-goals.sh
+```
+
+### Define your goals
+
+Edit `goals.md` with your goals as a markdown checklist:
+
+```markdown
+- [ ] Add user authentication with email/password
+- [ ] Set up Stripe checkout for pro subscriptions
+- [ ] Add dark mode toggle to settings
+```
+
+### Run it
+
+```bash
+./run-goals.sh              # Run through goals
+./run-goals.sh my-goals.md  # Use a different goals file
+./run-goals.sh --skip       # Skip current goal
+```
+
+### How it works
+
+1. Picks the next `- [ ]` goal from `goals.md`
+2. Launches a Claude session with `--dangerously-skip-permissions`
+3. Streams output in real-time (tool calls, text, results)
+4. When Claude finishes, it marks the goal `- [x]` and commits
+5. Auto-advances to the next goal
+
+### Goal status markers
+
+| Marker | Meaning |
+|--------|---------|
+| `- [ ]` | Pending |
+| `- [x]` | Completed and committed |
+| `- [~]` | Couldn't complete — changes stashed via `git stash` |
+| `- [-]` | Skipped |
+
+### Failure handling
+
+If Claude can't achieve a goal, it will:
+1. Stash tracked changes with `git stash push -m "goal-N: description"`
+2. Mark the goal as `- [~]` in goals.md
+3. Stop so the runner advances to the next goal
+
+Use `git stash list` to see stashed attempts and `git stash pop` to restore them.
+
+### Interactive controls
+
+Press **Ctrl+C** during a goal to pause the stream (Claude keeps working in background) and choose:
+
+| Key | Action |
+|-----|--------|
+| `i` | Jump into interactive session (resume with full context) |
+| `w` | Re-attach to the stream |
+| `s` | Skip this goal |
+| `r` | Retry from scratch |
+| `q` | Quit |
+
 ## Configuration
 
 ### orchestrate.sh options
