@@ -6,7 +6,6 @@
 #   ./run-goals.sh                  # Run through goals in auto mode
 #   ./run-goals.sh my-goals.md      # Use a different goals file
 #   ./run-goals.sh --skip           # Skip current goal, mark done
-#   ./run-goals.sh --timeout=900    # Safety timeout per goal in seconds (default: 900s/15min)
 #
 # How it works:
 #   Claude runs autonomously on each goal (auto mode via -p).
@@ -23,14 +22,12 @@
 GOALS_FILE="${1:-goals.md}"
 SKIP_FLAG=false
 COOLDOWN=3
-GOAL_TIMEOUT=900
 LOG_DIR="/tmp/goal-runner"
 
 for arg in "$@"; do
   case $arg in
     --skip) SKIP_FLAG=true ;;
     --cooldown=*) COOLDOWN="${arg#*=}" ;;
-    --timeout=*) GOAL_TIMEOUT="${arg#*=}" ;;
   esac
 done
 
@@ -222,16 +219,6 @@ If you cannot achieve this goal after reasonable effort:
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
 
-  # Safety watchdog: kill claude if it exceeds the timeout
-  (
-    sleep "$GOAL_TIMEOUT"
-    if kill -0 "$CLAUDE_PID" 2>/dev/null; then
-      echo "  Goal timed out after ${GOAL_TIMEOUT}s — killing session"
-      kill "$CLAUDE_PID" 2>/dev/null
-    fi
-  ) &
-  WATCHDOG_PID=$!
-
   # Ctrl+C: DON'T kill claude — just stop the stream display
   trap 'INTERRUPTED=true' INT
 
@@ -239,10 +226,6 @@ If you cannot achieve this goal after reasonable effort:
   stream_output "$ITER_LOG" "$CLAUDE_PID"
 
   trap - INT
-
-  # Kill the watchdog since goal finished (or was interrupted)
-  kill "$WATCHDOG_PID" 2>/dev/null
-  wait "$WATCHDOG_PID" 2>/dev/null || true
 
   GOAL_DURATION=$(( $(date +%s) - GOAL_START ))
 
