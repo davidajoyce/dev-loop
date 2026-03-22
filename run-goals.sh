@@ -6,6 +6,7 @@
 #   ./run-goals.sh                  # Run through goals in auto mode
 #   ./run-goals.sh my-goals.md      # Use a different goals file
 #   ./run-goals.sh --skip           # Skip current goal, mark done
+#   ./run-goals.sh --max-turns=50   # Limit turns per goal (prevents runaway sessions)
 #
 # How it works:
 #   Claude runs autonomously on each goal (auto mode via -p).
@@ -22,12 +23,14 @@
 GOALS_FILE="${1:-goals.md}"
 SKIP_FLAG=false
 COOLDOWN=3
+MAX_TURNS=""
 LOG_DIR="/tmp/goal-runner"
 
 for arg in "$@"; do
   case $arg in
     --skip) SKIP_FLAG=true ;;
     --cooldown=*) COOLDOWN="${arg#*=}" ;;
+    --max-turns=*) MAX_TURNS="${arg#*=}" ;;
   esac
 done
 
@@ -215,6 +218,7 @@ If you cannot achieve this goal after reasonable effort:
     --dangerously-skip-permissions \
     --verbose \
     --output-format stream-json \
+    ${MAX_TURNS:+--max-turns "$MAX_TURNS"} \
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
 
