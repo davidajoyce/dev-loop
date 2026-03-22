@@ -6,7 +6,7 @@
 #   ./run-goals.sh                  # Run through goals in auto mode
 #   ./run-goals.sh my-goals.md      # Use a different goals file
 #   ./run-goals.sh --skip           # Skip current goal, mark done
-#   ./run-goals.sh --timeout=900    # Timeout per goal in seconds (default: 900 = 15min)
+#   ./run-goals.sh --timeout=900    # Safety timeout per goal in seconds (default: 900s/15min)
 #
 # How it works:
 #   Claude runs autonomously on each goal (auto mode via -p).
@@ -214,13 +214,23 @@ If you cannot achieve this goal after reasonable effort:
 - Mark line $LINE_NUM in $GOALS_FILE as stashed: change '- [ ]' to '- [~]'
 - Do NOT commit — just stash and stop."
 
-  timeout "$GOAL_TIMEOUT" claude -p "$GOAL_PROMPT" \
+  claude -p "$GOAL_PROMPT" \
     --dangerously-skip-permissions \
     --verbose \
     --output-format stream-json \
     --append-system-prompt "CRITICAL: Never use run_in_background for Bash commands. Always run commands in the foreground. Background processes cause stale reminders that prevent clean session exit. Use timeouts for slow commands instead of backgrounding them." \
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
+
+  # Safety watchdog: kill claude if it exceeds the timeout
+  (
+    sleep "$GOAL_TIMEOUT"
+    if kill -0 "$CLAUDE_PID" 2>/dev/null; then
+      echo "  Goal timed out after ${GOAL_TIMEOUT}s — killing session"
+      kill "$CLAUDE_PID" 2>/dev/null
+    fi
+  ) &
+  WATCHDOG_PID=$!
 
   # Ctrl+C: DON'T kill claude — just stop the stream display
   trap 'INTERRUPTED=true' INT
@@ -229,6 +239,10 @@ If you cannot achieve this goal after reasonable effort:
   stream_output "$ITER_LOG" "$CLAUDE_PID"
 
   trap - INT
+
+  # Kill the watchdog since goal finished (or was interrupted)
+  kill "$WATCHDOG_PID" 2>/dev/null
+  wait "$WATCHDOG_PID" 2>/dev/null || true
 
   GOAL_DURATION=$(( $(date +%s) - GOAL_START ))
 
