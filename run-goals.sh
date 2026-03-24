@@ -215,7 +215,7 @@ If you cannot achieve this goal after reasonable effort:
     --dangerously-skip-permissions \
     --verbose \
     --output-format stream-json \
-    --append-system-prompt "CRITICAL: Never use run_in_background for Bash commands. Always run commands in the foreground. Background processes cause stale reminders that prevent clean session exit. Use timeouts for slow commands instead of backgrounding them." \
+    --append-system-prompt "CRITICAL: Never use run_in_background for ANY tool — not Bash, not Agent, not any other tool. Always run everything in the foreground. Background processes cause stale reminders that prevent clean session exit. Use timeouts for slow commands instead of backgrounding them. Do NOT launch background agents or background bash commands." \
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
 
