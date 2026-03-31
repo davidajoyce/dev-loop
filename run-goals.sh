@@ -203,7 +203,14 @@ while true; do
 
 IMPORTANT — This is goal $GOAL_NUM in an automated goal runner. When you finish:
 - Mark line $LINE_NUM in $GOALS_FILE as done: change '- [ ]' to '- [x]'
-- Commit your changes
+- Append a summary to goals-progress.md with this format:
+  ### [YYYY-MM-DD HH:MM] — Goal $GOAL_NUM: [Goal Title]
+  - What was done: [description]
+  - Files created/modified: [list]
+  - Tests: [pass/fail status or N/A]
+  - Learnings: [patterns discovered, gotchas, things that affect future goals]
+  - Blockers: [anything that couldn't be resolved, or none]
+- Commit your changes (include goals-progress.md in the commit)
 - Then STOP — do not continue with additional work. The runner will advance to the next goal.
 
 If you cannot achieve this goal after reasonable effort:
