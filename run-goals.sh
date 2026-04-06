@@ -248,7 +248,6 @@ If you cannot achieve this goal after reasonable effort:
   claude -p "$GOAL_PROMPT" \
     --dangerously-skip-permissions \
     --verbose \
-    --effort max \
     --output-format stream-json \
     --append-system-prompt "ABSOLUTE RULE — NO BACKGROUND TASKS:
 You MUST NOT set run_in_background=true on ANY tool call. This includes:
