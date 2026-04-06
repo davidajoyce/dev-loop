@@ -23,6 +23,7 @@ GOALS_FILE="${1:-goals.md}"
 SKIP_FLAG=false
 COOLDOWN=3
 LOG_DIR="/tmp/goal-runner"
+GOAL_TIMEOUT=${GOAL_TIMEOUT:-3000}  # 50 minutes per goal max
 
 for arg in "$@"; do
   case $arg in
@@ -44,18 +45,31 @@ mkdir -p "$LOG_DIR"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 get_next_goal() {
-  grep -n '^\- \[ \]' "$GOALS_FILE" | head -1
+  # Pick up timed-out [~] goals first, then unchecked [ ] goals
+  local result
+  result=$(grep -n '^\- \[~\]' "$GOALS_FILE" | head -1)
+  if [ -z "$result" ]; then
+    result=$(grep -n '^\- \[ \]' "$GOALS_FILE" | head -1)
+  fi
+  echo "$result"
 }
 
 count_remaining() {
-  local count
-  count=$(grep -c '^\- \[ \]' "$GOALS_FILE" 2>/dev/null) || true
-  echo "${count:-0}"
+  local unchecked timed_out
+  unchecked=$(grep -c '^\- \[ \]' "$GOALS_FILE" 2>/dev/null) || true
+  timed_out=$(grep -c '^\- \[~\]' "$GOALS_FILE" 2>/dev/null) || true
+  echo $(( ${unchecked:-0} + ${timed_out:-0} ))
 }
 
 mark_done() {
   local line_num="$1"
   sed -i '' "${line_num}s/- \[ \]/- [x]/" "$GOALS_FILE"
+  sed -i '' "${line_num}s/- \[~\]/- [x]/" "$GOALS_FILE"
+}
+
+mark_timed_out() {
+  local line_num="$1"
+  sed -i '' "${line_num}s/- \[ \]/- [~]/" "$GOALS_FILE"
 }
 
 # ─── JQ filter for rich output ────────────────────────────────────────────────
@@ -142,7 +156,7 @@ if $SKIP_FLAG; then
     exit 0
   fi
   LINE_NUM=$(echo "$MATCH" | cut -d: -f1)
-  GOAL_TEXT=$(echo "$MATCH" | cut -d: -f2- | sed 's/^- \[ \] //')
+  GOAL_TEXT=$(echo "$MATCH" | cut -d: -f2- | sed 's/^- \[.\] //')
   mark_done "$LINE_NUM"
   echo "Skipped: $GOAL_TEXT"
   exit 0
@@ -180,7 +194,9 @@ while true; do
   fi
 
   LINE_NUM=$(echo "$MATCH" | cut -d: -f1)
-  GOAL_TEXT=$(echo "$MATCH" | cut -d: -f2- | sed 's/^- \[ \] //')
+  GOAL_TEXT=$(echo "$MATCH" | cut -d: -f2- | sed 's/^- \[.\] //')
+  IS_RETRY=false
+  echo "$MATCH" | grep -q '^\- \[~\]' && IS_RETRY=true
   GOAL_NUM=$((GOAL_NUM + 1))
   REMAINING=$(count_remaining)
 
@@ -199,8 +215,19 @@ while true; do
   # ── Launch claude in background ─────────────────────────────────────────────
   INTERRUPTED=false
 
-  GOAL_PROMPT="$GOAL_TEXT
+  RETRY_CONTEXT=""
+  if $IS_RETRY; then
+    # Find the most recent log for this goal
+    PREV_LOG=$(ls -t "$LOG_DIR"/goal-*.jsonl 2>/dev/null | head -1)
+    RETRY_CONTEXT="
+NOTE: This goal previously timed out. Check the previous session log at $PREV_LOG for what was already done.
+You can extract text and tool calls from it with: jq -r 'select(.type==\"assistant\") | .message.content[]? | if .type==\"text\" then .text elif .type==\"tool_use\" then \"TOOL: \" + .name + \" \" + (.input | tostring | .[0:200]) else empty end' $PREV_LOG | tail -50
+Also check git log and git stash list for any committed or stashed work from the previous attempt.
+Resume where it left off rather than starting from scratch."
+  fi
 
+  GOAL_PROMPT="$GOAL_TEXT
+$RETRY_CONTEXT
 IMPORTANT — This is goal $GOAL_NUM in an automated goal runner. When you finish:
 - Mark line $LINE_NUM in $GOALS_FILE as done: change '- [ ]' to '- [x]'
 - Append a summary to goals-progress.md with this format:
@@ -215,16 +242,37 @@ IMPORTANT — This is goal $GOAL_NUM in an automated goal runner. When you finis
 
 If you cannot achieve this goal after reasonable effort:
 - Stash your tracked changes: git stash push -m \"goal-${GOAL_NUM}: ${GOAL_TEXT}\"
-- Mark line $LINE_NUM in $GOALS_FILE as stashed: change '- [ ]' to '- [~]'
+- Mark line $LINE_NUM in $GOALS_FILE as incomplete: change '- [ ]' or '- [~]' to '- [~]'
 - Do NOT commit — just stash and stop."
 
   claude -p "$GOAL_PROMPT" \
     --dangerously-skip-permissions \
     --verbose \
+    --effort max \
     --output-format stream-json \
-    --append-system-prompt "CRITICAL: Never use run_in_background for ANY tool — not Bash, not Agent, not any other tool. Always run everything in the foreground. Background processes cause stale reminders that prevent clean session exit. Use timeouts for slow commands instead of backgrounding them. Do NOT launch background agents or background bash commands." \
+    --append-system-prompt "ABSOLUTE RULE — NO BACKGROUND TASKS:
+You MUST NOT set run_in_background=true on ANY tool call. This includes:
+- Bash: NEVER use run_in_background. Use timeout command if a process might hang (e.g. timeout 30 npx convex logs).
+- Agent: NEVER use run_in_background. Always run agents in the foreground.
+- Any other tool: NEVER use run_in_background parameter.
+Background tasks cause the session to hang indefinitely waiting for completion notifications that never arrive.
+If you need to run a potentially long command, use a shell timeout: timeout <seconds> <command>
+If you need Convex logs, use: timeout 15 npx convex logs --prod --history
+VIOLATION OF THIS RULE WILL CAUSE THE ENTIRE GOAL RUNNER TO HANG." \
     > "$ITER_LOG" 2>/dev/null &
   CLAUDE_PID=$!
+  TIMED_OUT=false
+
+  # Watchdog: kill claude if it exceeds the goal timeout, mark as [~]
+  (
+    sleep "$GOAL_TIMEOUT"
+    if kill -0 "$CLAUDE_PID" 2>/dev/null; then
+      echo ""
+      echo "  ⚠️  Goal timed out after ${GOAL_TIMEOUT}s — killing session"
+      kill "$CLAUDE_PID" 2>/dev/null
+    fi
+  ) &
+  WATCHDOG_PID=$!
 
   # Ctrl+C: DON'T kill claude — just stop the stream display
   trap 'INTERRUPTED=true' INT
@@ -234,7 +282,16 @@ If you cannot achieve this goal after reasonable effort:
 
   trap - INT
 
+  # Kill the watchdog timer
+  kill "$WATCHDOG_PID" 2>/dev/null
+  wait "$WATCHDOG_PID" 2>/dev/null || true
+
   GOAL_DURATION=$(( $(date +%s) - GOAL_START ))
+
+  # Check if goal timed out (duration >= timeout and not interrupted by user)
+  if [ "$GOAL_DURATION" -ge "$GOAL_TIMEOUT" ] && ! $INTERRUPTED; then
+    TIMED_OUT=true
+  fi
 
   # Extract session ID from the log for resume
   SESSION_ID=$(jq -r 'select(.type == "system") | .session_id // empty' "$ITER_LOG" 2>/dev/null | head -1)
@@ -338,11 +395,27 @@ If you cannot achieve this goal after reasonable effort:
         ;;
     esac
   else
-    # ── Goal completed successfully ─────────────────────────────────────────
-    mark_done "$LINE_NUM"
-    echo ""
-    echo ""
-    echo "  Completed: $GOAL_TEXT (${GOAL_DURATION}s)"
+    if $TIMED_OUT; then
+      # ── Goal timed out — mark as [~] for retry next run ──────────────────
+      mark_timed_out "$LINE_NUM"
+      echo ""
+      echo ""
+      echo "  ⚠️  Timed out: $GOAL_TEXT (${GOAL_DURATION}s) — marked [~] for retry"
+      # Log partial progress
+      {
+        echo ""
+        echo "### [$(date '+%Y-%m-%d %H:%M')] — Goal $GOAL_NUM: $GOAL_TEXT (TIMED OUT)"
+        echo "- Status: Timed out after ${GOAL_DURATION}s"
+        echo "- Will retry on next run"
+        echo ""
+      } >> goals-progress.md
+    else
+      # ── Goal completed successfully ────────────────────────────────────────
+      mark_done "$LINE_NUM"
+      echo ""
+      echo ""
+      echo "  Completed: $GOAL_TEXT (${GOAL_DURATION}s)"
+    fi
 
     # Brief pause between goals
     REMAINING_NOW=$(count_remaining)
